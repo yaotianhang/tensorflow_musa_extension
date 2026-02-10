@@ -48,5 +48,6 @@ REGISTER_KERNEL_BUILDER(Name("Sqrt")
                             .Device("MUSA")
                             .TypeConstraint<Eigen::bfloat16>("T"),
                         MusaSqrtOp<Eigen::bfloat16>);
+
 } 
 }

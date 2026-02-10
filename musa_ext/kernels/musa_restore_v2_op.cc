@@ -9,6 +9,9 @@
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/platform/stream_executor.h" 
 
+
+#include "tensorflow/core/util/saved_tensor_slice_util.h"
+
 namespace tensorflow {
 namespace musa {
 
@@ -51,13 +54,30 @@ class MusaRestoreV2Op : public OpKernel {
       TensorShape full_shape;
       OP_REQUIRES_OK(ctx, reader.LookupTensorShape(name, &full_shape));
 
-      // 2. 解析切片逻辑
+      // 2. 解析切片并计算目标 Shape
       TensorShape target_shape;
-      TensorSlice slice(0);
+
+      TensorSlice slice(full_shape.dims());
       bool is_slice = !slice_spec.empty();
 
       if (is_slice) {
-        OP_REQUIRES_OK(ctx, TensorSlice::Parse(slice_spec, &slice));
+        TensorShape parsed_shape;
+        TensorSlice parsed_slice;
+        TensorShape parsed_shape_slice;
+        
+   
+        Status s = checkpoint::ParseShapeAndSlice(slice_spec, &parsed_shape, &parsed_slice, &parsed_shape_slice);
+        
+        if (s.ok()) {
+            slice = parsed_slice;
+            if (parsed_shape.dims() > 0 && parsed_shape != full_shape) {
+                 OP_REQUIRES(ctx, false, errors::InvalidArgument(
+                     "Shape in shape_and_slice spec does not match the shape in the checkpoint file."));
+            }
+        } else {
+            OP_REQUIRES_OK(ctx, TensorSlice::Parse(slice_spec, &slice));
+        }
+
         OP_REQUIRES_OK(ctx, slice.SliceTensorShape(full_shape, &target_shape));
       } else {
         target_shape = full_shape;
@@ -69,55 +89,31 @@ class MusaRestoreV2Op : public OpKernel {
 
       if (target_shape.num_elements() == 0) continue;
 
-      // 4. 分配 CPU 临时内存 (始终分配 Full Shape 以避免溢出)
-      Tensor cpu_full_tensor;
+      // 4. 分配 CPU 临时内存 
+      Tensor cpu_tensor;
       AllocatorAttributes cpu_alloc_attr;
       cpu_alloc_attr.set_on_host(true);
-      cpu_alloc_attr.set_gpu_compatible(true); // 建议加上，虽然 BlockHostUntilDone 会掩盖未对齐的问题，但加上更好
-      OP_REQUIRES_OK(ctx, ctx->allocate_temp(dtype, full_shape, &cpu_full_tensor, cpu_alloc_attr));
+      cpu_alloc_attr.set_gpu_compatible(true); 
+      OP_REQUIRES_OK(ctx, ctx->allocate_temp(dtype, target_shape, &cpu_tensor, cpu_alloc_attr));
 
-      // 5. 读取全量数据
-      OP_REQUIRES_OK(ctx, reader.Lookup(name, &cpu_full_tensor));
-
-      // 6. 计算源数据指针和偏移
-      const char* src_ptr_base = reinterpret_cast<const char*>(cpu_full_tensor.data());
-      const char* src_ptr = src_ptr_base;
-      uint64 copy_size_bytes = target_shape.num_elements() * DataTypeSize(dtype);
-
+      // 5. 读取数据
       if (is_slice) {
-        // 简单检查连续性
-        bool is_contiguous = true;
-        for (int d = 1; d < full_shape.dims(); ++d) {
-          if (slice.length(d) != full_shape.dim_size(d)) {
-            is_contiguous = false;
-            break;
-          }
-        }
-        
-        if (!is_contiguous) {
-           OP_REQUIRES(ctx, false, errors::Unimplemented(
-               "MusaRestoreV2 currently only supports contiguous slices (slicing on the first dimension)."));
-        }
-
-        int64 start_idx = slice.start(0);
-        int64 stride = 1;
-        for (int d = 1; d < full_shape.dims(); ++d) {
-          stride *= full_shape.dim_size(d);
-        }
-        
-        int64 offset_bytes = start_idx * stride * DataTypeSize(dtype);
-        src_ptr += offset_bytes;
+          
+          OP_REQUIRES_OK(ctx, reader.LookupSlice(name, slice, &cpu_tensor));
+      } else {
+          // 全量读取
+          OP_REQUIRES_OK(ctx, reader.Lookup(name, &cpu_tensor));
       }
 
-      // 7. 内存拷贝到 MUSA
+      // 6. 内存拷贝 (直接拷贝，无需计算偏移)
+      const void* src_ptr = cpu_tensor.data();
       void* dst_ptr = output_tensor->data();
+      uint64 copy_size_bytes = target_shape.num_elements() * DataTypeSize(dtype);
+      
       se::DeviceMemoryBase dst_mem(dst_ptr, copy_size_bytes);
       stream->ThenMemcpy(&dst_mem, src_ptr, copy_size_bytes);
 
-      // =================================================================================
-      // 关键修复：同步等待！
-      // 必须等待 GPU 拷贝完成，才能让 cpu_full_tensor 析构，否则 GPU 会读取已释放的内存。
-      // =================================================================================
+      // 7. 同步等待
       OP_REQUIRES_OK(ctx, stream->BlockHostUntilDone());
     }
   }

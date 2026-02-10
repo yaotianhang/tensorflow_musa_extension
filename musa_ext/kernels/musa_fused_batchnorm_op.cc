@@ -7,6 +7,7 @@
 #include "tensorflow/core/framework/bfloat16.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
+
 namespace tensorflow {
 namespace musa {
 
@@ -26,11 +27,13 @@ class MusaFusedBatchNormOp : public MusaOpKernel {
   }
 
   void Compute(OpKernelContext* ctx) override {
-    
-    if (!is_nhwc_) {
-         
+    // 调试日志：打印当前使用的数据格式
+    if (is_nhwc_) {
+        fprintf(stderr, "\n>>>>> MUSA FusedBatchNorm Forward (NHWC) <<<<<\n");
+    } else {
+        fprintf(stderr, "\n>>>>> MUSA FusedBatchNorm Forward (NCHW) <<<<<\n");
     }
-fprintf(stderr, "\n>>>>> MY CUSTOM MUSA KERNEL IS RUNNING (Standard NHWC) <<<<<\n");
+
     const Tensor& x = ctx->input(0);
     const Tensor& scale = ctx->input(1);
     const Tensor& offset = ctx->input(2);
@@ -53,6 +56,7 @@ fprintf(stderr, "\n>>>>> MY CUSTOM MUSA KERNEL IS RUNNING (Standard NHWC) <<<<<\
     auto* device = GetDeviceByCtx(ctx);
     auto& handle = device->mudnn_handle();
     auto stream = device->GetStream(); 
+    handle.SetAllowTF32(false);
 
     // 内存管理
     std::vector<Tensor> workspace_holder;
@@ -66,11 +70,17 @@ fprintf(stderr, "\n>>>>> MY CUSTOM MUSA KERNEL IS RUNNING (Standard NHWC) <<<<<\
     };
     auto maintainer = device->GetMemMaintainer(internal_maintainer);
 
-   
-    mTensor mt_x = CreateMTensor(x, mFormat::NHWC);
-    mTensor mt_y = CreateMTensor(*y, mFormat::NHWC);
+    // =====================================================================
+    // 【核心修复】根据 is_nhwc_ 动态设置格式
+    // =====================================================================
+    mFormat data_fmt = is_nhwc_ ? mFormat::NHWC : mFormat::NCHW;
+
+    // 输入 x 和输出 y 使用动态格式
+    mTensor mt_x = CreateMTensor(x, data_fmt);
+    mTensor mt_y = CreateMTensor(*y, data_fmt);
     
-    
+    // 参数 (Scale, Offset 等) 始终被视为 NCHW (1, C, 1, 1) 或者 1D
+    // 即使在 NHWC 模式下，参数通常也是独立的 vector，使用 NCHW 格式描述即可
     mTensor mt_scale = CreateMTensor(scale, mFormat::NCHW);
     mTensor mt_offset = CreateMTensor(offset, mFormat::NCHW);
     mTensor mt_fresh_mean = CreateMTensor(*saved_mean, mFormat::NCHW);
@@ -136,10 +146,13 @@ class MusaFusedBatchNormGradOp : public MusaOpKernel {
   }
 
   void Compute(OpKernelContext* ctx) override {
-    if (!is_nhwc_) {
-        // OP_REQUIRES(ctx, false, errors::Unimplemented("Only NHWC is supported."));
+    // 调试日志：打印当前使用的数据格式
+    if (is_nhwc_) {
+        fprintf(stderr, ">>>>> MUSA FusedBatchNorm Backward (NHWC) <<<<<\n");
+    } else {
+        fprintf(stderr, ">>>>> MUSA FusedBatchNorm Backward (NCHW) <<<<<\n");
     }
-	fprintf(stderr, ">>>>> CUSTOM BACKWARD RUNNING (Standard NHWC) <<<<<\n");
+
     const Tensor& dy = ctx->input(0);
     const Tensor& x = ctx->input(1);
     const Tensor& scale = ctx->input(2);
@@ -161,6 +174,7 @@ class MusaFusedBatchNormGradOp : public MusaOpKernel {
     auto* device = GetDeviceByCtx(ctx);
     auto& handle = device->mudnn_handle();
     auto stream = device->GetStream();
+    handle.SetAllowTF32(false);
     
     musaMemsetAsync(d_scale->flat<float>().data(), 0, d_scale->NumElements() * sizeof(float), stream);
     musaMemsetAsync(d_offset->flat<float>().data(), 0, d_offset->NumElements() * sizeof(float), stream);
@@ -178,13 +192,15 @@ class MusaFusedBatchNormGradOp : public MusaOpKernel {
     auto maintainer = device->GetMemMaintainer(maintainer_func);
 
     // =====================================================================
-    // TEST: Standard NHWC for Backward
+    // 【核心修复】根据 is_nhwc_ 动态设置格式
     // =====================================================================
-    mTensor mt_dy = CreateMTensor(dy, mFormat::NHWC);
-    mTensor mt_x = CreateMTensor(x, mFormat::NHWC);
-    mTensor mt_dx = CreateMTensor(*dx, mFormat::NHWC);
+    mFormat data_fmt = is_nhwc_ ? mFormat::NHWC : mFormat::NCHW;
+
+    mTensor mt_dy = CreateMTensor(dy, data_fmt);
+    mTensor mt_x = CreateMTensor(x, data_fmt);
+    mTensor mt_dx = CreateMTensor(*dx, data_fmt);
     
-    // Params
+    // 参数保持 NCHW
     mTensor mt_scale = CreateMTensor(scale, mFormat::NCHW);
     mTensor mt_saved_mean = CreateMTensor(saved_mean, mFormat::NCHW);
     mTensor mt_saved_var = CreateMTensor(saved_var, mFormat::NCHW);
@@ -198,6 +214,7 @@ class MusaFusedBatchNormGradOp : public MusaOpKernel {
     bn_op.SetMode(::musa::dnn::BatchNorm::Mode::PER_CHANNEL);
     bn_op.SetEpsilon(epsilon_);
     bn_op.SetTraining(is_training_);
+    
 
     mStatus status = bn_op.RunBwd(handle, 
                                   mt_dx, mt_d_mean, mt_d_var, mt_d_scale, mt_d_offset,
@@ -222,10 +239,8 @@ class MusaFusedBatchNormGradOp : public MusaOpKernel {
   REGISTER_KERNEL_BUILDER(Name("FusedBatchNormGradV3").Device("MUSA").TypeConstraint<TYPE>("T"), MusaFusedBatchNormGradOp<TYPE>);
 
 REGISTER_MUSA_BN_ALL(float);
-
 REGISTER_MUSA_BN_ALL(Eigen::half);
 REGISTER_MUSA_BN_ALL(bfloat16); 
 
 } // namespace musa
 } // namespace tensorflow
-

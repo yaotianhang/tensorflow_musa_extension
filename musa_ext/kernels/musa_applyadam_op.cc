@@ -62,11 +62,16 @@ class MusaApplyAdamOp : public MusaOpKernel {
     };
 
     ::musa::dnn::Binary b_op;
+
+    //b_op.SetAllowTF32(false); 
+
     ::musa::dnn::Unary u_op;
+ 
+    // u_op.SetAllowTF32(false);
 
     // 3. 数学公式：Alpha 计算
     double alpha_val = static_cast<double>(lr) * std::sqrt(1.0 - static_cast<double>(beta2_p)) / 
-                       (1.0 - static_cast<double>(beta1_p));
+                        (1.0 - static_cast<double>(beta1_p));
     
     // 调试日志
     LOG(INFO) << ">>>>> [MUSA_DEBUG] Adam Alpha: " << alpha_val 
@@ -95,7 +100,7 @@ class MusaApplyAdamOp : public MusaOpKernel {
     temp_storage.emplace_back();
     ctx->allocate_temp(DataTypeToEnum<T>::value, grad.shape(), &temp_storage.back());
     mTensor t_g2 = CreateMTensor(temp_storage.back(), format_);
-    b_op.Run(handle, t_grad, t_grad, t_g2); 
+    b_op.Run(handle, t_g2, t_grad, t_grad);; 
     temp_storage.emplace_back();
     ctx->allocate_temp(DataTypeToEnum<T>::value, grad.shape(), &temp_storage.back());
     mTensor t_g2_scaled = CreateMTensor(temp_storage.back(), format_);
@@ -147,7 +152,7 @@ class MusaApplyAdamOp : public MusaOpKernel {
       .HostMemory("beta1").HostMemory("beta2").HostMemory("epsilon"), MusaApplyAdamOp<T>); \
 //  REGISTER_KERNEL_BUILDER(Name("ResourceApplyAdam").Device(DEVICE_MTGPU).TypeConstraint<T>("T") \
 //      .HostMemory("beta1_power").HostMemory("beta2_power").HostMemory("lr") \
-  //    .HostMemory("beta1").HostMemory("beta2").HostMemory("epsilon"), MusaApplyAdamOp<T>);
+  //      .HostMemory("beta1").HostMemory("beta2").HostMemory("epsilon"), MusaApplyAdamOp<T>);
 
 REGISTER_MUSA(float);
 REGISTER_MUSA(double);
