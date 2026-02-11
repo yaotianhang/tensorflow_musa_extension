@@ -1,18 +1,17 @@
-#include "tensorflow/core/grappler/optimizers/custom_graph_optimizer.h"
-#include "tensorflow/core/grappler/grappler_item.h"
-#include "tensorflow/core/grappler/utils.h"
-#include "tensorflow/core/framework/node_def.pb.h"
-#include "tensorflow/core/framework/attr_value.pb.h"
-#include "tensorflow/core/grappler/optimizers/custom_graph_optimizer_registry.h"
-#include "MusaGraphUtils_layout.h"
-
-#include "musa_amp_config.h"
-
-#include <vector>
 #include <set>
 #include <string>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+#include "MusaGraphUtils_layout.h"
+#include "musa_amp_config.h"
+#include "tensorflow/core/framework/attr_value.pb.h"
+#include "tensorflow/core/framework/node_def.pb.h"
+#include "tensorflow/core/grappler/grappler_item.h"
+#include "tensorflow/core/grappler/optimizers/custom_graph_optimizer.h"
+#include "tensorflow/core/grappler/optimizers/custom_graph_optimizer_registry.h"
+#include "tensorflow/core/grappler/utils.h"
 
 namespace tensorflow {
 namespace grappler {
@@ -25,7 +24,8 @@ class MusaAmpOptimizer : public CustomGraphOptimizer {
   std::string name() const override { return "musa_amp_optimizer"; }
   bool UsesFunctionLibrary() const override { return false; }
 
-  Status Init(const tensorflow::RewriterConfig_CustomGraphOptimizer* config) override {
+  Status Init(
+      const tensorflow::RewriterConfig_CustomGraphOptimizer* config) override {
     if (config) {
       for (const auto& param : config->parameter_map()) {
         if (param.first == "aggressive_mode") {
@@ -47,12 +47,14 @@ class MusaAmpOptimizer : public CustomGraphOptimizer {
     return Status::OK();
   }
 
-  Status Optimize(Cluster* cluster, const GrapplerItem& item, GraphDef* optimized_graph) override {
+  Status Optimize(Cluster* cluster, const GrapplerItem& item,
+                  GraphDef* optimized_graph) override {
     *optimized_graph = item.graph;
 
     fprintf(stderr, "\n========== MUSA AMP Optimizer Start ==========\n");
     fprintf(stderr, "Original graph nodes: %d\n", optimized_graph->node_size());
-    fprintf(stderr, "Mode: %s\n", amp_config_.target_dtype == DT_BFLOAT16 ? "BF16" : "FP16");
+    fprintf(stderr, "Mode: %s\n",
+            amp_config_.target_dtype == DT_BFLOAT16 ? "BF16" : "FP16");
 
     std::unordered_map<string, bool> should_convert;
     AnalyzeGraphForAMP(*optimized_graph, should_convert);
@@ -195,9 +197,11 @@ class MusaAmpOptimizer : public CustomGraphOptimizer {
         continue;
       }
 
-      string cast_in_name = op_name + "/Input_" + std::to_string(idx) + "/CastF2Lower";
+      string cast_in_name =
+          op_name + "/Input_" + std::to_string(idx) + "/CastF2Lower";
 
-      MusaGraphUtils::InsertCast(graph, cast_in_name, input_name, DT_FLOAT, target_t, device);
+      MusaGraphUtils::InsertCast(graph, cast_in_name, input_name, DT_FLOAT,
+                                 target_t, device);
       new_inputs.push_back(cast_in_name);
     }
 
@@ -207,7 +211,8 @@ class MusaAmpOptimizer : public CustomGraphOptimizer {
     }
 
     string cast_out_name = op_name + "/Output/CastLower2F";
-    MusaGraphUtils::InsertCast(graph, cast_out_name, op_name, target_t, DT_FLOAT, device);
+    MusaGraphUtils::InsertCast(graph, cast_out_name, op_name, target_t,
+                               DT_FLOAT, device);
 
     for (int j = 0; j < graph->node_size(); ++j) {
       NodeDef* consumer = graph->mutable_node(j);
@@ -241,4 +246,3 @@ void __attribute__((constructor)) ForceMusaAmpOptimizerLoad() {
   fprintf(stderr, "[MUSA AMP] Optimizer module loaded (Supports FP16/BF16)\n");
 }
 }
-

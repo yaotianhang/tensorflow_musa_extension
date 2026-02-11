@@ -1,6 +1,7 @@
-/* Copyright @2020-2026 Moore Threads Technology Co., Ltd. All rights reserved. */
-#include "utils_op.h"
+/* Copyright @2020-2026 Moore Threads Technology Co., Ltd. All rights reserved.
+ */
 #include "tensorflow/core/util/bcast.h"
+#include "utils_op.h"
 
 namespace tensorflow {
 namespace musa {
@@ -16,12 +17,13 @@ class MusaComparisonOp : public MusaOpKernel {
     const Tensor& in1 = ctx->input(1);
 
     // 1. 广播形状检查与计算
-    BCast bcast(BCast::Vec(in0.shape().dim_sizes()), 
+    BCast bcast(BCast::Vec(in0.shape().dim_sizes()),
                 BCast::Vec(in1.shape().dim_sizes()));
-    OP_REQUIRES(ctx, bcast.IsValid(), 
-                errors::InvalidArgument("Incompatible shapes for comparison op: ",
-                                        in0.shape().DebugString(), " vs ",
-                                        in1.shape().DebugString()));
+    OP_REQUIRES(
+        ctx, bcast.IsValid(),
+        errors::InvalidArgument("Incompatible shapes for comparison op: ",
+                                in0.shape().DebugString(), " vs ",
+                                in1.shape().DebugString()));
 
     TensorShape output_shape = BCast::ToShape(bcast.output_shape());
     Tensor* out = nullptr;
@@ -31,51 +33,51 @@ class MusaComparisonOp : public MusaOpKernel {
 
     // 2. 准备 muDNN 资源
     auto& handle = GetHandleByCtx(ctx);
-    
+
     // 💡 建议：如果 in0 和 in1 形状不同，这里使用你定义的广播版 CreateMTensor
     // 如果没有广播版，muDNN 会要求输入维度完全一致
-    mTensor t0 = CreateMTensor(in0); 
+    mTensor t0 = CreateMTensor(in0);
     mTensor t1 = CreateMTensor(in1);
     mTensor t_out = CreateMTensor(*out);
 
     ::musa::dnn::Binary op;
     auto status = op.SetMode(mode);
-    OP_REQUIRES(ctx, status == mStatus::SUCCESS, 
+    OP_REQUIRES(ctx, status == mStatus::SUCCESS,
                 errors::Internal("muDNN Binary SetMode failed"));
 
     status = op.Run(handle, t_out, t0, t1);
-    OP_REQUIRES(ctx, status == mStatus::SUCCESS, 
+    OP_REQUIRES(ctx, status == mStatus::SUCCESS,
                 errors::Internal("muDNN Comparison Run failed"));
   }
 };
 
 // 定义具体的类名，方便注册
-using MusaEqualOp        = MusaComparisonOp<::musa::dnn::Binary::Mode::EQ>;
-using MusaNotEqualOp     = MusaComparisonOp<::musa::dnn::Binary::Mode::NE>;
+using MusaEqualOp = MusaComparisonOp<::musa::dnn::Binary::Mode::EQ>;
+using MusaNotEqualOp = MusaComparisonOp<::musa::dnn::Binary::Mode::NE>;
 using MusaGreaterEqualOp = MusaComparisonOp<::musa::dnn::Binary::Mode::GE>;
 
 // =====================================================================
 // 算子注册宏
 // =====================================================================
 
-#define REGISTER_COMPPARISON_KERNELS(type)                                     \
-  REGISTER_KERNEL_BUILDER(                                                     \
-      Name("Equal").Device(DEVICE_MTGPU).TypeConstraint<type>("T"),            \
-      MusaEqualOp);                                                            \
-  REGISTER_KERNEL_BUILDER(                                                     \
-      Name("NotEqual").Device(DEVICE_MTGPU).TypeConstraint<type>("T"),         \
-      MusaNotEqualOp);                                                         \
-  REGISTER_KERNEL_BUILDER(                                                     \
-      Name("GreaterEqual").Device(DEVICE_MTGPU).TypeConstraint<type>("T"),      \
+#define REGISTER_COMPPARISON_KERNELS(type)                                 \
+  REGISTER_KERNEL_BUILDER(                                                 \
+      Name("Equal").Device(DEVICE_MTGPU).TypeConstraint<type>("T"),        \
+      MusaEqualOp);                                                        \
+  REGISTER_KERNEL_BUILDER(                                                 \
+      Name("NotEqual").Device(DEVICE_MTGPU).TypeConstraint<type>("T"),     \
+      MusaNotEqualOp);                                                     \
+  REGISTER_KERNEL_BUILDER(                                                 \
+      Name("GreaterEqual").Device(DEVICE_MTGPU).TypeConstraint<type>("T"), \
       MusaGreaterEqualOp);
 
 // 注册 6 种基础数据类型
-REGISTER_COMPPARISON_KERNELS(float);          // FP32
-REGISTER_COMPPARISON_KERNELS(double);         // FP64
-REGISTER_COMPPARISON_KERNELS(int32);          // INT32
-REGISTER_COMPPARISON_KERNELS(int64);          // INT64
-REGISTER_COMPPARISON_KERNELS(Eigen::half);    // FP16
-REGISTER_COMPPARISON_KERNELS(bfloat16);       // BF16
+REGISTER_COMPPARISON_KERNELS(float);        // FP32
+REGISTER_COMPPARISON_KERNELS(double);       // FP64
+REGISTER_COMPPARISON_KERNELS(int32);        // INT32
+REGISTER_COMPPARISON_KERNELS(int64);        // INT64
+REGISTER_COMPPARISON_KERNELS(Eigen::half);  // FP16
+REGISTER_COMPPARISON_KERNELS(bfloat16);     // BF16
 
-} // namespace musa
-} // namespace tensorflow
+}  // namespace musa
+}  // namespace tensorflow

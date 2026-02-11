@@ -52,8 +52,9 @@ class UnsortedSegmentSumOp : public OpKernel {
     }
 
     OP_REQUIRES(ctx, data_elements % N == 0,
-                errors::InvalidArgument("data size must be a multiple of segment_ids size."));
-    
+                errors::InvalidArgument(
+                    "data size must be a multiple of segment_ids size."));
+
     const int64 M = data_elements / N;
 
     const auto data_flat = data.shaped<T, 2>({N, M});
@@ -72,15 +73,15 @@ class UnsortedSegmentSumOp : public OpKernel {
   }
 };
 
-#define REGISTER_MUSA_SEGMENT_SUM(type, index_type)                    \
-  REGISTER_KERNEL_BUILDER(Name("UnsortedSegmentSum")                   \
-                              .Device("MUSA")                          \
-                              .TypeConstraint<type>("T")               \
-                              .TypeConstraint<index_type>("Tindices")  \
-                              .HostMemory("data")                      \
-                              .HostMemory("segment_ids")               \
-                              .HostMemory("num_segments")              \
-                              .HostMemory("output"),                   \
+#define REGISTER_MUSA_SEGMENT_SUM(type, index_type)                   \
+  REGISTER_KERNEL_BUILDER(Name("UnsortedSegmentSum")                  \
+                              .Device("MUSA")                         \
+                              .TypeConstraint<type>("T")              \
+                              .TypeConstraint<index_type>("Tindices") \
+                              .HostMemory("data")                     \
+                              .HostMemory("segment_ids")              \
+                              .HostMemory("num_segments")             \
+                              .HostMemory("output"),                  \
                           UnsortedSegmentSumOp<type, index_type>)
 
 #define REGISTER_MUSA_SEGMENT_SUM_ALL(type) \
@@ -95,6 +96,5 @@ REGISTER_MUSA_SEGMENT_SUM_ALL(int64);
 #undef REGISTER_MUSA_SEGMENT_SUM_ALL
 #undef REGISTER_MUSA_SEGMENT_SUM
 
-} 
-} 
-
+}  // namespace musa
+}  // namespace tensorflow

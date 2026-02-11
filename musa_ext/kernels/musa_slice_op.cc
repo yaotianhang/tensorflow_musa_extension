@@ -1,4 +1,5 @@
-/* Copyright @2020-2026 Moore Threads Technology Co., Ltd. All rights reserved. */
+/* Copyright @2020-2026 Moore Threads Technology Co., Ltd. All rights reserved.
+ */
 #include "utils_op.h"
 
 namespace tensorflow {
@@ -36,7 +37,7 @@ class MusaSliceOp : public MusaOpKernel {
       if (s == -1) {
         s = input.dim_size(i) - b;
       }
-      
+
       starts_mt[i] = b;
       output_shape.AddDim(s);
     }
@@ -54,16 +55,16 @@ class MusaSliceOp : public MusaOpKernel {
 
     // 配置 muDNN Slice 逻辑 (通常在 Permute 类中)
     ::musa::dnn::Permute op;
-    
+
     // 此时 starts_mt.data() 是 int64_t* 类型，符合 muDNN API 要求
     auto status = op.ConfigDimStrideForSlice(out_mt, in_mt, starts_mt.data());
-    OP_REQUIRES(ctx, status == mStatus::SUCCESS, 
+    OP_REQUIRES(ctx, status == mStatus::SUCCESS,
                 errors::Internal("muDNN ConfigDimStrideForSlice failed. "
                                  "Check if input/output dims are consistent."));
 
     // 执行切片
     status = op.Run(handle, out_mt, in_mt);
-    OP_REQUIRES(ctx, status == mStatus::SUCCESS, 
+    OP_REQUIRES(ctx, status == mStatus::SUCCESS,
                 errors::Internal("muDNN Slice Run failed"));
   }
 };
@@ -72,19 +73,20 @@ class MusaSliceOp : public MusaOpKernel {
 // 算子注册 (支持 6 种基础数据类型)
 // =====================================================================
 
-#define REGISTER_MUSA_SLICE(type)                                      \
-  REGISTER_KERNEL_BUILDER(                                             \
-      Name("Slice").Device(DEVICE_MTGPU).TypeConstraint<type>("T")     \
-      .HostMemory("begin")                                             \
-      .HostMemory("size"),                                             \
-      MusaSliceOp<type>);
+#define REGISTER_MUSA_SLICE(type)                        \
+  REGISTER_KERNEL_BUILDER(Name("Slice")                  \
+                              .Device(DEVICE_MTGPU)      \
+                              .TypeConstraint<type>("T") \
+                              .HostMemory("begin")       \
+                              .HostMemory("size"),       \
+                          MusaSliceOp<type>);
 
-REGISTER_MUSA_SLICE(float);          // FP32
-REGISTER_MUSA_SLICE(double);         // FP64
-REGISTER_MUSA_SLICE(int32);          // INT32
-REGISTER_MUSA_SLICE(int64);          // INT64
-REGISTER_MUSA_SLICE(Eigen::half);    // FP16
-REGISTER_MUSA_SLICE(bfloat16);       // BF16
+REGISTER_MUSA_SLICE(float);        // FP32
+REGISTER_MUSA_SLICE(double);       // FP64
+REGISTER_MUSA_SLICE(int32);        // INT32
+REGISTER_MUSA_SLICE(int64);        // INT64
+REGISTER_MUSA_SLICE(Eigen::half);  // FP16
+REGISTER_MUSA_SLICE(bfloat16);     // BF16
 
-} // namespace musa
-} // namespace tensorflow
+}  // namespace musa
+}  // namespace tensorflow

@@ -1,10 +1,10 @@
+#include <mudnn.h>
+
+#include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
-#include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/util/bcast.h"
-
 #include "utils_op.h"
-#include <mudnn.h>
 
 namespace tensorflow {
 namespace musa {
@@ -23,8 +23,7 @@ class MusaMaximumOp : public MusaOpKernel {
   explicit MusaMaximumOp(OpKernelConstruction* ctx) : MusaOpKernel(ctx) {}
 
   void Compute(OpKernelContext* ctx) override {
-    // 调试日志
-    fprintf(stderr, ">>> [MUSA_TRACE_AUTO] %s\n", name().c_str());
+    // fprintf(stderr, ">>> [MUSA_TRACE_AUTO] %s\n", name().c_str());
 
     const Tensor& input_x = ctx->input(0);
     const Tensor& input_y = ctx->input(1);
@@ -33,11 +32,11 @@ class MusaMaximumOp : public MusaOpKernel {
     // Maximum 支持类似 [1, 10] 和 [5, 10] 的比较，结果是 [5, 10]
     BCast bcast(BCast::Vec(input_x.shape().dim_sizes()),
                 BCast::Vec(input_y.shape().dim_sizes()));
-    
+
     OP_REQUIRES(ctx, bcast.IsValid(),
-                errors::InvalidArgument("Incompatible shapes: ",
-                                        input_x.shape().DebugString(), " vs ",
-                                        input_y.shape().DebugString()));
+                errors::InvalidArgument(
+                    "Incompatible shapes: ", input_x.shape().DebugString(),
+                    " vs ", input_y.shape().DebugString()));
 
     TensorShape output_shape = BCast::ToShape(bcast.output_shape());
     Tensor* output = nullptr;
@@ -50,7 +49,7 @@ class MusaMaximumOp : public MusaOpKernel {
 
     // 根据 utils_op.h，逐元素二元运算使用 mBinary
     mBinary binary_op;
-    
+
     // 设置模式为 MAX
     // 参考 utils_op.h 中的 BINARY_MODE = ::musa::dnn::Binary::Mode
     binary_op.SetMode(BINARY_MODE::MAX);
@@ -66,20 +65,19 @@ class MusaMaximumOp : public MusaOpKernel {
     auto status = binary_op.Run(handle, mt_out, mt_x, mt_y);
 
     OP_REQUIRES(ctx, status == ::musa::dnn::Status::SUCCESS,
-                errors::Internal("MUSA Maximum execution failed. Status: ", (int)status));
+                errors::Internal("MUSA Maximum execution failed. Status: ",
+                                 (int)status));
   }
 };
 
 // 2. 注册 Kernel (同时绑定标准 Maximum 和自定义 MusaMaximum)
 #define REGISTER_MAXIMUM(TYPE)                                      \
-  REGISTER_KERNEL_BUILDER(Name("Maximum")                           \
-                              .Device("MUSA")                       \
-                              .TypeConstraint<TYPE>("T"),           \
-                          MusaMaximumOp<TYPE>);                     \
-  REGISTER_KERNEL_BUILDER(Name("MusaMaximum")                       \
-                              .Device("MUSA")                       \
-                              .TypeConstraint<TYPE>("T"),           \
-                          MusaMaximumOp<TYPE>);
+  REGISTER_KERNEL_BUILDER(                                          \
+      Name("Maximum").Device("MUSA").TypeConstraint<TYPE>("T"),     \
+      MusaMaximumOp<TYPE>);                                         \
+  REGISTER_KERNEL_BUILDER(                                          \
+      Name("MusaMaximum").Device("MUSA").TypeConstraint<TYPE>("T"), \
+      MusaMaximumOp<TYPE>);
 
 REGISTER_MAXIMUM(float);
 REGISTER_MAXIMUM(Eigen::half);

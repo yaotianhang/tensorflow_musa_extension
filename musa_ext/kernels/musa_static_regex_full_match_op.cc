@@ -1,25 +1,28 @@
 #include <regex>
+
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/shape_inference.h"
+#include "tensorflow/core/framework/tensor.h"
 
 namespace tensorflow {
 namespace musa {
 
 class MusaStaticRegexFullMatchOp : public OpKernel {
  public:
-  explicit MusaStaticRegexFullMatchOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+  explicit MusaStaticRegexFullMatchOp(OpKernelConstruction* ctx)
+      : OpKernel(ctx) {
     // 1. 获取正则表达式模式 (Pattern)
     string pattern_str;
     OP_REQUIRES_OK(ctx, ctx->GetAttr("pattern", &pattern_str));
-    
+
     // 2. 预编译正则表达式
     // 这样做的好处是：不用每处理一个字符串都重新编译一遍正则，极大提高效率。
     try {
       // 使用 ECMAScript 标准语法 (也是 C++ 默认的)
       regex_ = std::regex(pattern_str, std::regex_constants::optimize);
     } catch (const std::regex_error& e) {
-      OP_REQUIRES(ctx, false, errors::InvalidArgument("Invalid regex pattern: ", e.what()));
+      OP_REQUIRES(ctx, false,
+                  errors::InvalidArgument("Invalid regex pattern: ", e.what()));
     }
   }
 
@@ -31,7 +34,8 @@ class MusaStaticRegexFullMatchOp : public OpKernel {
     // 4. 分配输出
     // 输出是 bool 类型，形状和输入一样
     Tensor* output_tensor = nullptr;
-    OP_REQUIRES_OK(ctx, ctx->allocate_output(0, input_tensor.shape(), &output_tensor));
+    OP_REQUIRES_OK(
+        ctx, ctx->allocate_output(0, input_tensor.shape(), &output_tensor));
     auto output_flat = output_tensor->flat<bool>();
 
     const int64 N = input_tensor.NumElements();
@@ -53,11 +57,11 @@ class MusaStaticRegexFullMatchOp : public OpKernel {
 
 // 6. 注册 Kernel
 // 重点：输入是 string，输出是 bool，全部留在 CPU 内存 (.HostMemory)
-#define REGISTER_MUSA_KERNEL()                        \
-  REGISTER_KERNEL_BUILDER(Name("StaticRegexFullMatch")\
-                              .Device("MUSA")         \
-                              .HostMemory("input")    \
-                              .HostMemory("output"),  \
+#define REGISTER_MUSA_KERNEL()                         \
+  REGISTER_KERNEL_BUILDER(Name("StaticRegexFullMatch") \
+                              .Device("MUSA")          \
+                              .HostMemory("input")     \
+                              .HostMemory("output"),   \
                           MusaStaticRegexFullMatchOp);
 
 REGISTER_MUSA_KERNEL();

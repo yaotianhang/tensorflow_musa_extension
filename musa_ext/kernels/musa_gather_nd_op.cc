@@ -1,4 +1,5 @@
-/* Copyright @2020-2026 Moore Threads Technology Co., Ltd. All rights reserved. */
+/* Copyright @2020-2026 Moore Threads Technology Co., Ltd. All rights reserved.
+ */
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -22,8 +23,9 @@ class MusaGatherNdOp : public MusaOpKernel {
 
     // 1. 形状校验：GatherNd 的索引深度不能超过参数维度
     OP_REQUIRES(ctx, index_depth <= params_dims,
-                errors::InvalidArgument("index_depth (", index_depth, 
-                                        ") must be <= params_dims (", params_dims, ")"));
+                errors::InvalidArgument("index_depth (", index_depth,
+                                        ") must be <= params_dims (",
+                                        params_dims, ")"));
 
     // 2. 计算输出 Shape
     // 公式：OutputShape = indices.shape[:-1] + params.shape[index_depth:]
@@ -47,8 +49,8 @@ class MusaGatherNdOp : public MusaOpKernel {
     mTensor t_output = CreateMTensor(*output);
 
     // 4. 配置并执行 GatherX (GATHER_ND 模式)
-    mGatherX op; // 对应 ::musa::dnn::GatherX
-    
+    mGatherX op;  // 对应 ::musa::dnn::GatherX
+
     // 设置模式为 GATHER_ND
     auto status = op.SetMode(::musa::dnn::GatherX::Mode::GATHER_ND);
     OP_REQUIRES(ctx, status == mStatus::SUCCESS,
@@ -58,8 +60,9 @@ class MusaGatherNdOp : public MusaOpKernel {
     status = op.Run(handle, t_output, t_indices, t_params);
 
     OP_REQUIRES(ctx, status == mStatus::SUCCESS,
-                errors::Internal("MUSA muDNN GatherNd (GatherX) execution failed. Status: ",
-                                static_cast<int>(status)));
+                errors::Internal(
+                    "MUSA muDNN GatherNd (GatherX) execution failed. Status: ",
+                    static_cast<int>(status)));
   }
 };
 
@@ -67,11 +70,11 @@ class MusaGatherNdOp : public MusaOpKernel {
 // 5. 算子注册 (支持 Wide&Deep 常用类型)
 // =====================================================================
 
-#define REGISTER_MUSA_GATHER_ND(type, itype)                         \
-  REGISTER_KERNEL_BUILDER(Name("GatherNd")                           \
-                              .Device(DEVICE_MTGPU)                  \
-                              .TypeConstraint<type>("Tparams")       \
-                              .TypeConstraint<itype>("Tindices"),    \
+#define REGISTER_MUSA_GATHER_ND(type, itype)                      \
+  REGISTER_KERNEL_BUILDER(Name("GatherNd")                        \
+                              .Device(DEVICE_MTGPU)               \
+                              .TypeConstraint<type>("Tparams")    \
+                              .TypeConstraint<itype>("Tindices"), \
                           MusaGatherNdOp<type, itype>);
 
 // 注册 float 配合 int32/int64 索引
@@ -90,5 +93,5 @@ REGISTER_MUSA_GATHER_ND(int32, int64);
 REGISTER_MUSA_GATHER_ND(int64, int32);
 REGISTER_MUSA_GATHER_ND(int64, int64);
 
-} // namespace musa
-} // namespace tensorflow
+}  // namespace musa
+}  // namespace tensorflow

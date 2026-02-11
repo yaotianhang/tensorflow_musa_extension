@@ -1,4 +1,5 @@
 #include "utils_op.h"
+
 #include "tensorflow/core/common_runtime/device_mgr.h"
 #include "tensorflow/core/framework/device_attributes.pb.h"
 
@@ -8,85 +9,109 @@ namespace musa {
 namespace {
 mType GetType(DataType t) {
   switch (t) {
-    case DataType::DT_FLOAT: return mType::FLOAT;
-    case DataType::DT_DOUBLE: return mType::DOUBLE;
-    case DataType::DT_INT32: return mType::INT32;
-    case DataType::DT_UINT8: return mType::UINT8;
-    case DataType::DT_INT16: return mType::INT16;
-    case DataType::DT_INT8: return mType::INT8;
-    case DataType::DT_INT64: return mType::INT64;
-    case DataType::DT_BFLOAT16: return mType::BFLOAT16;
-    case DataType::DT_UINT16: return mType::UINT16;
-    case DataType::DT_HALF: return mType::HALF;
-    case DataType::DT_UINT32: return mType::UINT32;
-    case DataType::DT_UINT64: return mType::UINT64;
-    case DataType::DT_BOOL: return mType::BOOL;
-    default: CHECK(false); throw;
+    case DataType::DT_FLOAT:
+      return mType::FLOAT;
+    case DataType::DT_DOUBLE:
+      return mType::DOUBLE;
+    case DataType::DT_INT32:
+      return mType::INT32;
+    case DataType::DT_UINT8:
+      return mType::UINT8;
+    case DataType::DT_INT16:
+      return mType::INT16;
+    case DataType::DT_INT8:
+      return mType::INT8;
+    case DataType::DT_INT64:
+      return mType::INT64;
+    case DataType::DT_BFLOAT16:
+      return mType::BFLOAT16;
+    case DataType::DT_UINT16:
+      return mType::UINT16;
+    case DataType::DT_HALF:
+      return mType::HALF;
+    case DataType::DT_UINT32:
+      return mType::UINT32;
+    case DataType::DT_UINT64:
+      return mType::UINT64;
+    case DataType::DT_BOOL:
+      return mType::BOOL;
+    default:
+      CHECK(false);
+      throw;
   }
 }
+}  // namespace
+
+mStatus MusaFree(void* ptr) {
+  if (ptr) musaFree(ptr);
+  return mStatus::SUCCESS;
+}
+mStatus MusaAllocate(size_t size, void** ptr) {
+  musaMalloc(ptr, size);
+  return mStatus::SUCCESS;
 }
 
-mStatus MusaFree(void* ptr) { if (ptr) musaFree(ptr); return mStatus::SUCCESS; }
-mStatus MusaAllocate(size_t size, void** ptr) { musaMalloc(ptr, size); return mStatus::SUCCESS; }
-
 // ============================================================
-// CreateMTensor: 极简策略 (Low-Dim -> Force NCHW)
+// CreateMTensor: Minimal Strategy (Low-Dim -> Force NCHW)
 // ============================================================
 mTensor CreateMTensor(const Tensor& t, mFormat format) {
   mTensor rst;
-  rst.SetAddr(const_cast<void*>(static_cast<const void*>(t.tensor_data().data())));
+  rst.SetAddr(
+      const_cast<void*>(static_cast<const void*>(t.tensor_data().data())));
   rst.SetType(GetType(t.dtype()));
 
-  // 1. 原样提取维度 (不做任何补齐，完全信任底层对低维的支持)
+  // 1. Extract dimensions as-is (without padding, fully trust low-dimensional support from underlying)
   auto dims_raw = t.shape().dim_sizes();
   std::vector<int64_t> dims;
   for (auto d : dims_raw) {
-      dims.push_back(d);
+    dims.push_back(d);
   }
 
-  // 2. 格式策略 (你的核心想法)
-  // 如果是真正的 4D 数据 (Conv/BN 输入)，必须尊重传入的 format (NHWC/NCHW)，
-  // 这样才能支持 Layout Optimization。
+  // 2. Format strategy (your core idea)
+  // If it's real 4D data (Conv/BN input), must respect the incoming format (NHWC/NCHW),
+  // so that Layout Optimization can be supported.
   if (dims.size() >= 4) {
-      rst.SetFormat(format);
+    rst.SetFormat(format);
   }
-  // 如果是低维数据 (1D 参数, 2D/3D 中间变量)，
-  // 强制使用 NCHW。
-  // NCHW 在这里代表 "Linear Contiguous Memory" (线性连续内存)。
-  // - 对 Sub ([8]): 线性内存 -> 不崩。
-  // - 对 BN Param ([32]): 线性内存 -> 参数读取正确。
+  // If it's low dimensional data (1D parameters, 2D/3D intermediate variables),
+  // force NCHW.
+  // NCHW here represents "Linear Contiguous Memory".
+  // - For Sub ([8]): linear memory -> won't crash.
+  // - For BN Param ([32]): linear memory -> parameter read correctly.
   else {
-      rst.SetFormat(mFormat::NCHW);
+    rst.SetFormat(mFormat::NCHW);
   }
 
   rst.SetNdInfo(static_cast<int>(dims.size()), dims.data());
   return rst;
 }
 
-// 对于 不是4d的算子
+// For operators that are not 4D
 mTensor CreateMTensor(const Tensor& t) {
-  
   mTensor rst;
   MTOP_CHECK_LOG(rst.SetAddr(t.data()), "SetAddr");
   MTOP_CHECK_LOG(rst.SetType(GetType(t.dtype())), "SetType");
   auto dims_int = t.shape().dim_sizes();
-  MTOP_CHECK_LOG(rst.SetNdInfo(static_cast<int>(dims_int.size()), reinterpret_cast<const int64_t*>(dims_int.data())), "SetNdInfo");
+  MTOP_CHECK_LOG(
+      rst.SetNdInfo(static_cast<int>(dims_int.size()),
+                    reinterpret_cast<const int64_t*>(dims_int.data())),
+      "SetNdInfo");
   return rst;
 }
 
 // ============================================================
-// GetMusaFormat: 标准逻辑
+// GetMusaFormat: Standard Logic
 // ============================================================
 mFormat GetMusaFormat(OpKernelConstruction* ctx) {
   string df;
-  // 正常读取属性，不多做手脚
+  // Read attribute normally, don't do extra work
   if (ctx->HasAttr("data_format")) {
     if (ctx->GetAttr("data_format", &df).ok()) {
       return (df == "NCHW") ? mFormat::NCHW : mFormat::NHWC;
     }
   }
-  // 默认 NHWC (照顾 4D 算子)
-  return mFormat::NHWC; 
+  // Default NHWC (for 4D operators)
+  return mFormat::NHWC;
 }
 
 MusaDevice* GetDeviceByCtx(tensorflow::OpKernelContext* context) {
@@ -99,4 +124,3 @@ MusaDevice* GetDeviceByCtx(tensorflow::OpKernelContext* context) {
 
 }  // namespace musa
 }  // namespace tensorflow
-

@@ -1,4 +1,9 @@
-/* Copyright @2020-2026 Moore Threads Technology Co., Ltd. All rights reserved. */
+/* Copyright @2020-2026 Moore Threads Technology Co., Ltd. All rights reserved.
+ */
+
+#include <cmath>
+#include <iostream>
+#include <list>
 
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
@@ -7,9 +12,6 @@
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/types.h"
 #include "utils_op.h"
-#include <cmath>
-#include <list>
-#include <iostream>
 
 namespace tensorflow {
 namespace musa {
@@ -18,15 +20,15 @@ namespace musa {
 // 🛠️ 辅助函数：Handle 透传
 // =================================================================
 void ForwardResourceHandle(OpKernelContext* ctx) {
-    if (ctx->num_outputs() > 0) {
-        if (ctx->input_dtype(0) == DT_RESOURCE) {
-            for (int i = 0; i < ctx->num_outputs(); ++i) {
-                ctx->set_output(i, ctx->input(i));
-            }
-        } else {
-            ctx->forward_ref_input_to_ref_output(0, 0);
-        }
+  if (ctx->num_outputs() > 0) {
+    if (ctx->input_dtype(0) == DT_RESOURCE) {
+      for (int i = 0; i < ctx->num_outputs(); ++i) {
+        ctx->set_output(i, ctx->input(i));
+      }
+    } else {
+      ctx->forward_ref_input_to_ref_output(0, 0);
     }
+  }
 }
 
 // =================================================================
@@ -48,7 +50,8 @@ class MusaApplyAdamOp : public MusaOpKernel {
     OP_REQUIRES_OK(ctx, LookupResource(ctx, HandleFromInput(ctx, 2), &v));
     core::ScopedUnref r1(var), r2(m), r3(v);
 
-    OP_REQUIRES(ctx, var->tensor()->IsInitialized(), errors::FailedPrecondition("Var not initialized"));
+    OP_REQUIRES(ctx, var->tensor()->IsInitialized(),
+                errors::FailedPrecondition("Var not initialized"));
 
     // 2. 准备计算资源
     auto& handle = GetHandleByCtx(ctx);
@@ -58,12 +61,12 @@ class MusaApplyAdamOp : public MusaOpKernel {
     ::musa::dnn::Fill fill_op;
 
     auto fill_t = [&](float val, const TensorShape& s) {
-        temps.emplace_back();
-        ctx->allocate_temp(DT_FLOAT, s, &temps.back());
-        mTensor t = CreateMTensor(temps.back(), format_);
-        fill_op.SetValue(val);
-        fill_op.Run(handle, t);
-        return t;
+      temps.emplace_back();
+      ctx->allocate_temp(DT_FLOAT, s, &temps.back());
+      mTensor t = CreateMTensor(temps.back(), format_);
+      fill_op.SetValue(val);
+      fill_op.Run(handle, t);
+      return t;
     };
 
     // 3. 获取参数 (Host Memory)
@@ -128,23 +131,31 @@ class MusaApplyAdamOp : public MusaOpKernel {
 };
 
 // =================================================================
-// 2. 注册区域 (注意：ReadVariableOp 已在 musa_resource_variable_op.cc 注册，这里不要重复！)
+// 2. 注册区域 (注意：ReadVariableOp 已在 musa_resource_variable_op.cc
+// 注册，这里不要重复！)
 // =================================================================
 
 // 注册 Adam
-#define REGISTER_ADAM(T) \
-  REGISTER_KERNEL_BUILDER(Name("ResourceApplyAdam").Device(DEVICE_MTGPU).TypeConstraint<T>("T") \
-      .HostMemory("beta1_power").HostMemory("beta2_power").HostMemory("lr") \
-      .HostMemory("beta1").HostMemory("beta2").HostMemory("epsilon"), MusaApplyAdamOp<T>);
+#define REGISTER_ADAM(T)                                 \
+  REGISTER_KERNEL_BUILDER(Name("ResourceApplyAdam")      \
+                              .Device(DEVICE_MTGPU)      \
+                              .TypeConstraint<T>("T")    \
+                              .HostMemory("beta1_power") \
+                              .HostMemory("beta2_power") \
+                              .HostMemory("lr")          \
+                              .HostMemory("beta1")       \
+                              .HostMemory("beta2")       \
+                              .HostMemory("epsilon"),    \
+                          MusaApplyAdamOp<T>);
 
 REGISTER_ADAM(float);
 REGISTER_ADAM(double);
 REGISTER_ADAM(Eigen::half);
 REGISTER_ADAM(bfloat16);
-REGISTER_ADAM(int64); 
+REGISTER_ADAM(int64);
 REGISTER_ADAM(int32);
 
 // 注意：这里删除了 REGISTER_READ_VAR 宏和调用，避免重复定义
 
-} // namespace musa
-} // namespace tensorflow
+}  // namespace musa
+}  // namespace tensorflow

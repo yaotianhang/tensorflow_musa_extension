@@ -1,19 +1,20 @@
-#include <iostream>
-#include <vector>
-#include <memory>
 #include <functional>
+#include <iostream>
+#include <memory>
+#include <vector>
 
+#include "tensorflow/core/framework/bounds_check.h"
+#include "tensorflow/core/framework/common_shape_fns.h"
+#include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
-#include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/shape_inference.h"
-#include "tensorflow/core/framework/common_shape_fns.h"
-#include "tensorflow/core/framework/bounds_check.h"
 
 // 引入 MUSA 头文件
+#include <mudnn.h>
+
 #include "mu/device/musa_memcpy.h"
 #include "utils_op.h"
-#include <mudnn.h>
 
 namespace tensorflow {
 namespace musa {
@@ -35,8 +36,7 @@ class MusaMeanOp : public MusaOpKernel {
   }
 
   void Compute(OpKernelContext* ctx) override {
-    // 调试日志 (可选保留，方便验证是否运行)
-    //fprintf(stderr, ">>> [MUSA_TRACE_AUTO] %s\n", name().c_str());
+    // fprintf(stderr, ">>> [MUSA_TRACE_AUTO] %s\n", name().c_str());
 
     const Tensor& input = ctx->input(0);
     const Tensor& axes_tensor = ctx->input(1);
@@ -62,7 +62,7 @@ class MusaMeanOp : public MusaOpKernel {
       auto axes_flat = axes_tensor.flat<Tidx>();
       for (int64_t i = 0; i < num_axes; i++) {
         Tidx index = axes_flat(i);
-        if (index < 0) index += input.dims(); // 处理负索引
+        if (index < 0) index += input.dims();  // 处理负索引
         if (index >= 0 && index < input.dims() && !bitmap[index]) {
           bitmap[index] = true;
           reduce_dims.push_back(static_cast<int>(index));
@@ -71,7 +71,7 @@ class MusaMeanOp : public MusaOpKernel {
     }
 
     // --- 2. 计算输出 Shape ---
-    TensorShape output_shape;       // TF 逻辑输出形状 (根据 keep_dims 变化)
+    TensorShape output_shape;  // TF 逻辑输出形状 (根据 keep_dims 变化)
     TensorShape musa_output_shape;  // MUSA 物理输出形状 (总是 keep_dims=true)
     int64_t reduce_elements = 1;
 
@@ -79,7 +79,7 @@ class MusaMeanOp : public MusaOpKernel {
       if (bitmap[d]) {
         reduce_elements *= input.dim_size(d);
         if (keep_dims_) output_shape.AddDim(1);
-        musa_output_shape.AddDim(1); // muDNN 总是需要看到维度变成 1
+        musa_output_shape.AddDim(1);  // muDNN 总是需要看到维度变成 1
       } else {
         output_shape.AddDim(input.dim_size(d));
         musa_output_shape.AddDim(input.dim_size(d));
@@ -96,15 +96,15 @@ class MusaMeanOp : public MusaOpKernel {
 
     // 特殊情况：如果是 Identity (没有维度被 reduce)，直接拷贝
     if (reduce_elements == 1) {
-       musaStream_t stream = reinterpret_cast<musaStream_t>(handle.GetStream());
-       MusaMemcpyAsyncD2D(const_cast<char*>(out->tensor_data().data()),
-                          input.tensor_data().data(),
-                          input.TotalBytes(), stream);
-       return;
+      musaStream_t stream = reinterpret_cast<musaStream_t>(handle.GetStream());
+      MusaMemcpyAsyncD2D(const_cast<char*>(out->tensor_data().data()),
+                         input.tensor_data().data(), input.TotalBytes(),
+                         stream);
+      return;
     }
 
     // --- 4. 准备 muDNN 计算 ---
-    
+
     // 创建一个 View (视图)，让 muDNN 以为输出是 keep_dims=true 的形状
     // 这样数据指针没变，但形状对了
     Tensor out_reshaped(out->dtype());
@@ -122,23 +122,27 @@ class MusaMeanOp : public MusaOpKernel {
 
     // --- 5. 配置显存分配器 (之前漏了这个导致 SegFault) ---
     // 这是为了给 muDNN 提供临时 Workspace 空间
-    tensorflow::Allocator* tf_allocator = ctx->device()->GetAllocator(tensorflow::AllocatorAttributes());
+    tensorflow::Allocator* tf_allocator =
+        ctx->device()->GetAllocator(tensorflow::AllocatorAttributes());
 
-    auto alloc_func = [tf_allocator](size_t size) -> std::unique_ptr<void, std::function<void(void*)>> {
-        void* ptr = tf_allocator->AllocateRaw(256, size);
-        std::function<void(void*)> deleter = [tf_allocator](void* p) {
-            if (p) tf_allocator->DeallocateRaw(p);
-        };
-        return std::unique_ptr<void, std::function<void(void*)>>(ptr, deleter);
+    auto alloc_func =
+        [tf_allocator](
+            size_t size) -> std::unique_ptr<void, std::function<void(void*)>> {
+      void* ptr = tf_allocator->AllocateRaw(256, size);
+      std::function<void(void*)> deleter = [tf_allocator](void* p) {
+        if (p) tf_allocator->DeallocateRaw(p);
+      };
+      return std::unique_ptr<void, std::function<void(void*)>>(ptr, deleter);
     };
 
     ::musa::dnn::MemoryMaintainer mm(alloc_func);
 
     // --- 6. 执行 ---
     auto status = op.Run(handle, t_out, t_in, mm);
-    
-    OP_REQUIRES(ctx, status == ::musa::dnn::Status::SUCCESS, 
-                errors::Internal("MUSA Mean execution failed. Status: ", (int)status));
+
+    OP_REQUIRES(
+        ctx, status == ::musa::dnn::Status::SUCCESS,
+        errors::Internal("MUSA Mean execution failed. Status: ", (int)status));
   }
 
  private:
@@ -146,18 +150,18 @@ class MusaMeanOp : public MusaOpKernel {
 };
 
 // 注册 Kernel
-#define REGISTER_MEAN_KERNEL(T, Tidx)                               \
-  REGISTER_KERNEL_BUILDER(Name("Mean")                              \
-                              .Device("MUSA")                       \
-                              .TypeConstraint<T>("T")               \
-                              .TypeConstraint<Tidx>("Tidx")         \
-                              .HostMemory("reduction_indices"),     \
-                          MusaMeanOp<T, Tidx>);                     \
-  REGISTER_KERNEL_BUILDER(Name("MusaMean")                          \
-                              .Device("MUSA")                       \
-                              .TypeConstraint<T>("T")               \
-                              .TypeConstraint<Tidx>("Tidx")         \
-                              .HostMemory("reduction_indices"),     \
+#define REGISTER_MEAN_KERNEL(T, Tidx)                           \
+  REGISTER_KERNEL_BUILDER(Name("Mean")                          \
+                              .Device("MUSA")                   \
+                              .TypeConstraint<T>("T")           \
+                              .TypeConstraint<Tidx>("Tidx")     \
+                              .HostMemory("reduction_indices"), \
+                          MusaMeanOp<T, Tidx>);                 \
+  REGISTER_KERNEL_BUILDER(Name("MusaMean")                      \
+                              .Device("MUSA")                   \
+                              .TypeConstraint<T>("T")           \
+                              .TypeConstraint<Tidx>("Tidx")     \
+                              .HostMemory("reduction_indices"), \
                           MusaMeanOp<T, Tidx>);
 
 REGISTER_MEAN_KERNEL(float, int32);

@@ -1,11 +1,12 @@
-/* Copyright @2020-2026 Moore Threads Technology Co., Ltd. All rights reserved. */
+/* Copyright @2020-2026 Moore Threads Technology Co., Ltd. All rights reserved.
+ */
 
-#include "utils_op.h"
+#include "tensorflow/core/framework/lookup_interface.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/resource_mgr.h"
-#include "tensorflow/core/framework/lookup_interface.h"
-#include "tensorflow/core/kernels/lookup_util.h" 
+#include "tensorflow/core/kernels/lookup_util.h"
 #include "tensorflow/core/platform/logging.h"
+#include "utils_op.h"
 
 namespace tensorflow {
 namespace musa {
@@ -93,30 +94,30 @@ class MusaLookupTableExportOp : public OpKernel {
     core::ScopedUnref unref_me(table);
 
     // 【核心修正】：根据编译器 note，ExportValues 只接收一个 ctx 参数。
-    // 在这个接口设计中，table->ExportValues(c) 内部会自动调用 
+    // 在这个接口设计中，table->ExportValues(c) 内部会自动调用
     // c->allocate_output 或 c->set_output 来填充输出的 keys 和 values。
     OP_REQUIRES_OK(c, table->ExportValues(c));
   }
 };
 
 // ==================== 注册区 ====================
-#define REGISTER_MUSA_LOOKUP_OPS(K, V)                                         \
-  REGISTER_KERNEL_BUILDER(Name("LookupTableFindV2")                            \
-                              .Device(DEVICE_MTGPU)                            \
-                              .HostMemory("table_handle")                      \
-                              .TypeConstraint<K>("Tin")                        \
-                              .TypeConstraint<V>("Tout"),                      \
-                          MusaLookupTableFindOp<K, V>);                        \
-  REGISTER_KERNEL_BUILDER(Name("LookupTableInsertV2")                          \
-                              .Device(DEVICE_MTGPU)                            \
-                              .HostMemory("table_handle")                      \
-                              .TypeConstraint<K>("Tin")                        \
-                              .TypeConstraint<V>("Tout"),                      \
-                          MusaLookupTableInsertOp<K, V>);                      \
-  REGISTER_KERNEL_BUILDER(Name("LookupTableRemoveV2")                          \
-                              .Device(DEVICE_MTGPU)                            \
-                              .HostMemory("table_handle")                      \
-                              .TypeConstraint<K>("Tin"),                       \
+#define REGISTER_MUSA_LOOKUP_OPS(K, V)                    \
+  REGISTER_KERNEL_BUILDER(Name("LookupTableFindV2")       \
+                              .Device(DEVICE_MTGPU)       \
+                              .HostMemory("table_handle") \
+                              .TypeConstraint<K>("Tin")   \
+                              .TypeConstraint<V>("Tout"), \
+                          MusaLookupTableFindOp<K, V>);   \
+  REGISTER_KERNEL_BUILDER(Name("LookupTableInsertV2")     \
+                              .Device(DEVICE_MTGPU)       \
+                              .HostMemory("table_handle") \
+                              .TypeConstraint<K>("Tin")   \
+                              .TypeConstraint<V>("Tout"), \
+                          MusaLookupTableInsertOp<K, V>); \
+  REGISTER_KERNEL_BUILDER(Name("LookupTableRemoveV2")     \
+                              .Device(DEVICE_MTGPU)       \
+                              .HostMemory("table_handle") \
+                              .TypeConstraint<K>("Tin"),  \
                           MusaLookupTableRemoveOp<K, V>);
 
 REGISTER_MUSA_LOOKUP_OPS(int32, float);
@@ -129,8 +130,8 @@ REGISTER_KERNEL_BUILDER(Name("LookupTableExportV2")
                             .Device(DEVICE_MTGPU)
                             .HostMemory("table_handle")
                             .HostMemory("keys")
-                            .HostMemory("values"), 
+                            .HostMemory("values"),
                         MusaLookupTableExportOp);
 
-} // namespace musa
-} // namespace tensorflow
+}  // namespace musa
+}  // namespace tensorflow

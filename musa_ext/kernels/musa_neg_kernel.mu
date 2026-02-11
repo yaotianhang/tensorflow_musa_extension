@@ -1,5 +1,5 @@
 #include <musa_runtime.h>
-#include <stdint.h> 
+#include <stdint.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wignored-pragmas"
@@ -42,7 +42,8 @@ __global__ void NegKernel(const T* in, T* out, int size) {
 }
 
 template <typename T>
-void MusaNegKernelLauncher(const void* in, void* out, int size, musaStream_t stream) {
+void MusaNegKernelLauncher(const void* in, void* out, int size,
+                           musaStream_t stream) {
   const int block_size = 256;
   const int grid_size = (size + block_size - 1) / block_size;
 
@@ -50,13 +51,17 @@ void MusaNegKernelLauncher(const void* in, void* out, int size, musaStream_t str
       static_cast<const T*>(in), static_cast<T*>(out), size);
 }
 
-template void MusaNegKernelLauncher<float>(const void*, void*, int, musaStream_t);
-template void MusaNegKernelLauncher<double>(const void*, void*, int, musaStream_t);
+template void MusaNegKernelLauncher<float>(const void*, void*, int,
+                                           musaStream_t);
+template void MusaNegKernelLauncher<double>(const void*, void*, int,
+                                            musaStream_t);
 template void MusaNegKernelLauncher<int>(const void*, void*, int, musaStream_t);
-template void MusaNegKernelLauncher<long long>(const void*, void*, int, musaStream_t);
-template void MusaNegKernelLauncher<Eigen::half>(const void*, void*, int, musaStream_t);
-template void MusaNegKernelLauncher<bfloat16>(const void*, void*, int, musaStream_t);
+template void MusaNegKernelLauncher<long long>(const void*, void*, int,
+                                               musaStream_t);
+template void MusaNegKernelLauncher<Eigen::half>(const void*, void*, int,
+                                                 musaStream_t);
+template void MusaNegKernelLauncher<bfloat16>(const void*, void*, int,
+                                              musaStream_t);
 
-} // namespace musa
-} // namespace tensorflow
-
+}  // namespace musa
+}  // namespace tensorflow

@@ -1,11 +1,13 @@
-/* Copyright @2020-2026 Moore Threads Technology Co., Ltd. All rights reserved. */
+/* Copyright @2020-2026 Moore Threads Technology Co., Ltd. All rights reserved.
+ */
 
 #include <mudnn.h>
 #include <mudnn_tensor.h>
-#include "utils_op.h"
+
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/tensor.h"
+#include "utils_op.h"
 
 namespace tensorflow {
 namespace musa {
@@ -68,25 +70,26 @@ class MusaTileOp : public MusaOpKernel {
 
     // 3. 执行物理平铺
     ::musa::dnn::Permute op;
-    MTOP_CHECK_OK_RUN(op.Run(h, out_mt, in_mt), "Permute Run for Tile", context);
+    MTOP_CHECK_OK_RUN(op.Run(h, out_mt, in_mt), "Permute Run for Tile",
+                      context);
   }
 };
 
 // =====================================================================
 // 4. 注册 6 种数据类型 (T) 及其对应的 2 种索引类型 (Tmultiples)
 // =====================================================================
-#define REGISTER_MUSA_TILE_ALL_TYPES(type)                               \
-  REGISTER_KERNEL_BUILDER(Name("Tile")                                   \
-                              .Device(DEVICE_MTGPU)                      \
-                              .TypeConstraint<type>("T")                 \
-                              .TypeConstraint<int32>("Tmultiples")       \
-                              .HostMemory("multiples"),                  \
-                          MusaTileOp<type, int32>);                      \
-  REGISTER_KERNEL_BUILDER(Name("Tile")                                   \
-                              .Device(DEVICE_MTGPU)                      \
-                              .TypeConstraint<type>("T")                 \
-                              .TypeConstraint<int64>("Tmultiples")       \
-                              .HostMemory("multiples"),                  \
+#define REGISTER_MUSA_TILE_ALL_TYPES(type)                         \
+  REGISTER_KERNEL_BUILDER(Name("Tile")                             \
+                              .Device(DEVICE_MTGPU)                \
+                              .TypeConstraint<type>("T")           \
+                              .TypeConstraint<int32>("Tmultiples") \
+                              .HostMemory("multiples"),            \
+                          MusaTileOp<type, int32>);                \
+  REGISTER_KERNEL_BUILDER(Name("Tile")                             \
+                              .Device(DEVICE_MTGPU)                \
+                              .TypeConstraint<type>("T")           \
+                              .TypeConstraint<int64>("Tmultiples") \
+                              .HostMemory("multiples"),            \
                           MusaTileOp<type, int64>);
 
 // 6 种核心类型：float, half, double, int32, int64, bool
