@@ -5,7 +5,6 @@
 #pragma GCC diagnostic ignored "-Wignored-pragmas"
 #include "tensorflow/core/framework/bfloat16.h"
 #include "tensorflow/core/framework/types.h"
-#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #pragma GCC diagnostic pop
 
 namespace tensorflow {
@@ -26,7 +25,7 @@ void LaunchAssignCopy(const T* src, T* dst, int64_t n, musaStream_t stream) {
   AssignCopyKernel<T><<<blocks, kThreads, 0, stream>>>(src, dst, n);
 }
 
-// 显式实例化（只覆盖你注册的 4 个类型）
+
 template void LaunchAssignCopy<float>(const float*, float*, int64_t,
                                       musaStream_t);
 template void LaunchAssignCopy<double>(const double*, double*, int64_t,
