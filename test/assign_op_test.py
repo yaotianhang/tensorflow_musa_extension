@@ -13,7 +13,7 @@
 #See the License for the specific language governing permissions and
 #limitations under the License.
 #== == == == == == == == == == == == == == == == == == == == == == == == == == \
-    == == == == == == == == == == == == ==
+# == == == == == == == == == == == == ==
 
 """Tests for MUSA Assign operator (Ref-variable tf.raw_ops.Assign)."""
 
