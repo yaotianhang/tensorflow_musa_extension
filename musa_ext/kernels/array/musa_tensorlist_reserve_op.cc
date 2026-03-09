@@ -77,8 +77,7 @@ class MusaTensorListReserveOp : public MusaOpKernel {
     output_list.element_dtype = element_dtype_;
     output_list.element_shape = element_shape;
 
-    // TensorListReserve 只预留 list slots，不实际分配每个元素的设备存储。
-    // 与 TensorListStack 不同，这里不需要 stream / musaMemcpyAsync。
+    
     output_list.tensors().resize(num_elements);
 
     output_handle->scalar<Variant>()() = std::move(output_list);
