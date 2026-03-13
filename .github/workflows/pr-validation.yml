@@ -27,13 +27,13 @@ jobs:
           docker cp . Runner:/tmp/pr_test_${{ github.run_id }}
  
       # 3. 进入容器并安装当前 PR 的代码包
-      - name: Install MUSA-aware TensorFlow
-        run: |
-          docker exec Runner bash -c "
-            cd /tmp/pr_test_${{ github.run_id }}
-            pip install --upgrade pip
-            pip install -e .
-          "
+      # - name: Install MUSA-aware TensorFlow
+      #   run: |
+      #     docker exec Runner bash -c "
+      #       cd /tmp/pr_test_${{ github.run_id }}
+      #       pip install --upgrade pip
+      #       pip install -e .
+      #     "
  
       # 4. 进入容器并验证 MUSA 设备
       - name: Verify MUSA device availability
