@@ -107,8 +107,8 @@ FusionMatchResult MatMulBiasAddFusion::Match(const GraphDef& graph,
   return result;
 }
 
-Status MatMulBiasAddFusion::Apply(
-    GraphDef* graph, const FusionMatchResult& match_result) const {
+Status MatMulBiasAddFusion::Apply(GraphDef* graph,
+                                  const FusionMatchResult& match_result) const {
   if (!match_result.IsValid()) {
     return Status(error::INVALID_ARGUMENT,
                   "Invalid MatMulBiasAdd match result");
@@ -194,11 +194,10 @@ Status MatMulBiasAddFusion::Apply(
   fused_node->add_input(matmul_node->input(0));
   fused_node->add_input(matmul_node->input(1));
 
-  // Keep original bias edge string exactly, do not replace with bias_node->name()
-  // because input could be "bias:0" instead of just "bias".
-  fused_node->add_input(
-      bias_add_node->input(bias_add_node->input(0) == matmul_node->name() ? 1
-                                                                          : 0));
+  // Keep original bias edge string exactly, do not replace with
+  // bias_node->name() because input could be "bias:0" instead of just "bias".
+  fused_node->add_input(bias_add_node->input(
+      bias_add_node->input(0) == matmul_node->name() ? 1 : 0));
 
   auto* attr = fused_node->mutable_attr();
   (*attr)["T"] = output_dtype;
@@ -216,9 +215,8 @@ Status MatMulBiasAddFusion::Apply(
   }
 
   // Remove matched nodes if now unused.
-  std::vector<std::string> removable_names = {
-      original_output_name, matmul_node->name()
-  };
+  std::vector<std::string> removable_names = {original_output_name,
+                                              matmul_node->name()};
 
   FusionGraphUtils::RemoveNodesIfUnused(
       graph, removable_names,
@@ -235,7 +233,7 @@ Status MatMulBiasAddFusion::Apply(
 REGISTER_FUSION_PATTERN(MatMulBiasAddFusion);
 
 // Register kernel availability
-REGISTER_FUSION_KERNEL(MatMulBiasAddFusion, []() { return false; });
+REGISTER_FUSION_KERNEL(MatMulBiasAddFusion, []() { return true; });
 
 }  // namespace musa_fusion
 }  // namespace grappler
