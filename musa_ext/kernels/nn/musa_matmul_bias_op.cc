@@ -1,7 +1,7 @@
+#include "../utils_op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/tensor.h"
-#include "../utils_op.h"
 
 namespace tensorflow {
 namespace musa {
@@ -22,16 +22,20 @@ class MusaMatMulBiasAddOp : public MusaOpKernel {
     const Tensor& bias = ctx->input(2);
 
     OP_REQUIRES(ctx, a.dims() == 2,
-                errors::InvalidArgument("MatMulBiasAdd requires input a to be 2D, got shape ",
-                                        a.shape().DebugString()));
+                errors::InvalidArgument(
+                    "MatMulBiasAdd requires input a to be 2D, got shape ",
+                    a.shape().DebugString()));
     OP_REQUIRES(ctx, b.dims() == 2,
-                errors::InvalidArgument("MatMulBiasAdd requires input b to be 2D, got shape ",
-                                        b.shape().DebugString()));
+                errors::InvalidArgument(
+                    "MatMulBiasAdd requires input b to be 2D, got shape ",
+                    b.shape().DebugString()));
     OP_REQUIRES(ctx, bias.dims() == 1,
-                errors::InvalidArgument("MatMulBiasAdd requires bias to be 1D, got shape ",
-                                        bias.shape().DebugString()));
+                errors::InvalidArgument(
+                    "MatMulBiasAdd requires bias to be 1D, got shape ",
+                    bias.shape().DebugString()));
 
-    if (a.NumElements() == 0 || b.NumElements() == 0 || bias.NumElements() == 0) {
+    if (a.NumElements() == 0 || b.NumElements() == 0 ||
+        bias.NumElements() == 0) {
       TensorShape out_shape;
       OP_REQUIRES_OK(ctx, ComputeOutputShape(a, b, &out_shape));
 
@@ -50,18 +54,17 @@ class MusaMatMulBiasAddOp : public MusaOpKernel {
     const int64_t k_b = transpose_b_ ? b_cols : b_rows;
     const int64_t n = transpose_b_ ? b_rows : b_cols;
 
-    OP_REQUIRES(
-        ctx, k_a == k_b,
-        errors::InvalidArgument("Matrix size-incompatible: a shape ",
-                                a.shape().DebugString(), ", b shape ",
-                                b.shape().DebugString(), ", transpose_a=",
-                                transpose_a_, ", transpose_b=", transpose_b_));
+    OP_REQUIRES(ctx, k_a == k_b,
+                errors::InvalidArgument("Matrix size-incompatible: a shape ",
+                                        a.shape().DebugString(), ", b shape ",
+                                        b.shape().DebugString(),
+                                        ", transpose_a=", transpose_a_,
+                                        ", transpose_b=", transpose_b_));
 
-    OP_REQUIRES(
-        ctx, bias.dim_size(0) == n,
-        errors::InvalidArgument("Bias dimension mismatch: bias shape ",
-                                bias.shape().DebugString(),
-                                ", expected [", n, "]"));
+    OP_REQUIRES(ctx, bias.dim_size(0) == n,
+                errors::InvalidArgument("Bias dimension mismatch: bias shape ",
+                                        bias.shape().DebugString(),
+                                        ", expected [", n, "]"));
 
     TensorShape out_shape({m, n});
     Tensor* output = nullptr;
@@ -95,7 +98,6 @@ class MusaMatMulBiasAddOp : public MusaOpKernel {
                 errors::Internal("muDNN MatMul SetGamma failed, status=",
                                  static_cast<int>(status)));
 
-
     status = op.RunWithBiasAdd(handle, mt_out, mt_a, mt_b, mt_bias);
 
     OP_REQUIRES(ctx, status == ::musa::dnn::Status::SUCCESS,
@@ -119,8 +121,7 @@ class MusaMatMulBiasAddOp : public MusaOpKernel {
     if (k_a != k_b) {
       return errors::InvalidArgument(
           "Matrix size-incompatible: a shape ", a.shape().DebugString(),
-          ", b shape ", b.shape().DebugString(),
-          ", transpose_a=", transpose_a_,
+          ", b shape ", b.shape().DebugString(), ", transpose_a=", transpose_a_,
           ", transpose_b=", transpose_b_);
     }
 
@@ -133,9 +134,9 @@ class MusaMatMulBiasAddOp : public MusaOpKernel {
   bool transpose_b_;
 };
 
-#define REGISTER_MUSA_MATMUL_BIASADD(TYPE)                                 \
-  REGISTER_KERNEL_BUILDER(                                                  \
-      Name("MusaMatMulBiasAdd").Device("MUSA").TypeConstraint<TYPE>("T"),       \
+#define REGISTER_MUSA_MATMUL_BIASADD(TYPE)                                \
+  REGISTER_KERNEL_BUILDER(                                                \
+      Name("MusaMatMulBiasAdd").Device("MUSA").TypeConstraint<TYPE>("T"), \
       MusaMatMulBiasAddOp<TYPE>);
 
 REGISTER_MUSA_MATMUL_BIASADD(float);

@@ -235,7 +235,7 @@ Status MatMulBiasAddFusion::Apply(
 REGISTER_FUSION_PATTERN(MatMulBiasAddFusion);
 
 // Register kernel availability
-REGISTER_FUSION_KERNEL(MatMulBiasAddFusion, []() { return true; });
+REGISTER_FUSION_KERNEL(MatMulBiasAddFusion, []() { return false; });
 
 }  // namespace musa_fusion
 }  // namespace grappler
