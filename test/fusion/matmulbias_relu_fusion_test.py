@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Tests for Linear+Relu fusion."""
+"""Tests for Matmul+BiasAdd+Relu fusion."""
 
 import os
 import numpy as np
@@ -123,11 +123,11 @@ class LinearReluFusionTest(MUSATestCase):
         has_fused_node = False
         for partition_graph in run_metadata.partition_graphs:
             for node in partition_graph.node:
-                if node.op == "MusaLinearRelu":
+                if node.op == "MusaMatmulBiasRelu":
                     has_fused_node = True
                     break
 
-        self.assertTrue(has_fused_node, "MusaLinearRelu fusion was NOT applied to the graph")
+        self.assertTrue(has_fused_node, "MusaMatmulBiasRelu fusion was NOT applied to the graph")
 
     def test_linear_relu_fusion_various_batch_sizes(self):
         """Test fusion correctness across several batch sizes."""
@@ -169,7 +169,7 @@ class LinearReluFusionTest(MUSATestCase):
             self.assertAllClose(actual, expected.numpy(), rtol=1e-5, atol=1e-5)
 
     def test_linear_relu_fusion_not_applied_with_intervening_op(self):
-        """If an extra op exists between MatMul and BiasAdd, fusion should not occur."""
+        """If an extra op exists between Matmul and BiasAdd, fusion should not occur."""
         m, k, n = 2, 5, 7
         x_np = np.random.randn(m, k).astype(np.float32)
         w_np = np.random.randn(k, n).astype(np.float32)
@@ -200,11 +200,11 @@ class LinearReluFusionTest(MUSATestCase):
         has_fused_node = False
         for partition_graph in run_metadata.partition_graphs:
             for node in partition_graph.node:
-                if node.op == "MusaLinearRelu":
+                if node.op == "MusaMatmulBiasRelu":
                     has_fused_node = True
                     break
 
-        self.assertFalse(has_fused_node, "MusaLinearRelu fusion should NOT be applied when an intervening op exists")
+        self.assertFalse(has_fused_node, "MusaMatmulBiasRelu fusion should NOT be applied when an intervening op exists")
 
     def test_linear_relu_fusion_dtypes(self):
         """Test fusion correctness across multiple dtypes: float32, float16, bfloat16."""

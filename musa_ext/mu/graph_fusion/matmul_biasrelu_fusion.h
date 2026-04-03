@@ -9,10 +9,10 @@ namespace musa_fusion {
 
 // Computes: MatMul + BiasAdd + Relu
 
-class LinearReluFusion : public FusionPattern {
+class MatmulBiasReluFusion : public FusionPattern {
  public:
-  LinearReluFusion() = default;
-  ~LinearReluFusion() override = default;
+ MatmulBiasReluFusion() = default;
+ ~MatmulBiasReluFusion() override = default;
 
   FusionMatchResult Match(const GraphDef& graph,
                           int start_node_idx) const override;
@@ -20,15 +20,15 @@ class LinearReluFusion : public FusionPattern {
   Status Apply(GraphDef* graph,
                const FusionMatchResult& match_result) const override;
 
-  int GetPriority() const override { return 98; }
+  int GetPriority() const override { return 96; }
 
   bool IsKernelAvailable() const override;
 
-  std::string GetName() const override { return "LinearReluFusion"; }
+  std::string GetName() const override { return "MatmulBiasReluFusion"; }
 
   std::string GetFallbackReason() const override {
     if (!kernel_available_) {
-      return "LinearReluFusion kernel not available on this device";
+      return "MatmulBiasReluFusion kernel not available on this device";
     }
     return "";
   }

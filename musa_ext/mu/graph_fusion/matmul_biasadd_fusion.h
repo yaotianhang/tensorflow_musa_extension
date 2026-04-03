@@ -22,7 +22,7 @@ class MatMulBiasAddFusion : public FusionPattern {
   Status Apply(GraphDef* graph,
                const FusionMatchResult& match_result) const override;
 
-  int GetPriority() const override { return 99; }
+  int GetPriority() const override { return 98; }
 
   bool IsKernelAvailable() const override;
 
