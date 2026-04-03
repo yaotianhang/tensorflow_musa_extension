@@ -11,8 +11,8 @@ namespace musa_fusion {
 
 class MatmulBiasReluFusion : public FusionPattern {
  public:
- MatmulBiasReluFusion() = default;
- ~MatmulBiasReluFusion() override = default;
+  MatmulBiasReluFusion() = default;
+  ~MatmulBiasReluFusion() override = default;
 
   FusionMatchResult Match(const GraphDef& graph,
                           int start_node_idx) const override;

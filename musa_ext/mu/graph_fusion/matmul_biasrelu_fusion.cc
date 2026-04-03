@@ -56,7 +56,7 @@ bool MatmulBiasReluFusion::IsKernelAvailable() const {
 }
 
 FusionMatchResult MatmulBiasReluFusion::Match(const GraphDef& graph,
-                                          int start_node_idx) const {
+                                              int start_node_idx) const {
   FusionMatchResult result;
   if (start_node_idx < 0 || start_node_idx >= graph.node_size()) {
     return result;
@@ -117,10 +117,11 @@ FusionMatchResult MatmulBiasReluFusion::Match(const GraphDef& graph,
   return result;
 }
 
-Status MatmulBiasReluFusion::Apply(GraphDef* graph,
-                               const FusionMatchResult& match_result) const {
+Status MatmulBiasReluFusion::Apply(
+    GraphDef* graph, const FusionMatchResult& match_result) const {
   if (!match_result.IsValid()) {
-    return Status(error::INVALID_ARGUMENT, "Invalid MatmulBiasReluFusion match result");
+    return Status(error::INVALID_ARGUMENT,
+                  "Invalid MatmulBiasReluFusion match result");
   }
 
   if (!IsKernelAvailable()) {

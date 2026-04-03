@@ -106,9 +106,10 @@ class MusaMatmulBiasReluOp : public MusaOpKernel {
       status = op.Run(handle, mt_mm_out, mt_a, mt_b);
     }
 
-    OP_REQUIRES(ctx, status == ::musa::dnn::Status::SUCCESS,
-                errors::Internal(
-                    "MUSA Matmul/BatchMatmul execution failed in MatmulBiasRelu."));
+    OP_REQUIRES(
+        ctx, status == ::musa::dnn::Status::SUCCESS,
+        errors::Internal(
+            "MUSA Matmul/BatchMatmul execution failed in MatmulBiasRelu."));
 
     // 2. BiasAdd + Relu
     MUSA_KERNEL_TRACE_START("UseMudnn");
@@ -137,9 +138,10 @@ class MusaMatmulBiasReluOp : public MusaOpKernel {
     mTensor mt_out = CreateMTensor(*output);
 
     int channel_dim = mm_out_shape.dims() - 1;
-    OP_REQUIRES(
-        ctx, bias_input.dim_size(0) == mm_out_shape.dim_size(channel_dim),
-        errors::InvalidArgument("Dimension mismatch in BiasAdd of MatmulBiasRelu"));
+    OP_REQUIRES(ctx,
+                bias_input.dim_size(0) == mm_out_shape.dim_size(channel_dim),
+                errors::InvalidArgument(
+                    "Dimension mismatch in BiasAdd of MatmulBiasRelu"));
 
     int dims_cnt = mm_out_shape.dims();
     std::vector<int64_t> b_dims(dims_cnt, 1);
@@ -179,7 +181,7 @@ class MusaMatmulBiasReluOp : public MusaOpKernel {
 };
 
 #define REGISTER_MUSA_MatmulBias_RELU(TYPE)                                \
-  REGISTER_KERNEL_BUILDER(                                             \
+  REGISTER_KERNEL_BUILDER(                                                 \
       Name("MusaMatmulBiasRelu").Device("MUSA").TypeConstraint<TYPE>("T"), \
       MusaMatmulBiasReluOp<TYPE>);
 
