@@ -64,7 +64,7 @@ struct MusaOptimizerConfigs {
   TriState constant_folding = TriState::kDefault;
   TriState shape_optimization = TriState::kDefault;
   TriState auto_mixed_precision =
-      TriState::kOff;  // MUSA handles AMP internally
+      TriState::kDefault;  // MUSA handles AMP internally
   TriState pin_to_host_optimization = TriState::kDefault;
   TriState layout_optimizer = TriState::kOff;  // MUSA handles layout internally
   TriState remapping = TriState::kDefault;
@@ -348,6 +348,12 @@ class MusaGraphOptimizer : public CustomGraphOptimizer {
 
     VLOG(1) << "MusaGraphOptimizer: Optimizing graph with "
             << optimized_graph->node_size() << " nodes";
+    if (VLOG_IS_ON(2)) {
+      VLOG(2) << "Nodes in graph:";
+      for (const auto& node : optimized_graph->node()) {
+        VLOG(2) << "  - " << node.name() << " (" << node.op() << ")";
+      }
+    }
 
     // Step 1: Layout optimization (NHWC -> NCHW)
     if (configs_.layout_optimizer != TriState::kOff) {
@@ -503,6 +509,7 @@ class MusaGraphOptimizer : public CustomGraphOptimizer {
 
   // Layout Optimization
   void OptimizeLayout(GraphDef* graph) {
+    VLOG(1) << "MusaGraphOptimizer: Starting layout optimization";
     bool changed = true;
     int iteration = 0;
     const int kMaxIterations = 5;
@@ -573,6 +580,7 @@ class MusaGraphOptimizer : public CustomGraphOptimizer {
 
   // AMP Optimization
   void OptimizeAMP(GraphDef* graph) {
+    VLOG(1) << "MusaGraphOptimizer: Starting AMP fix optimization";
     std::unordered_map<string, bool> should_convert;
     AnalyzeGraphForAMP(*graph, should_convert);
 
@@ -593,7 +601,7 @@ class MusaGraphOptimizer : public CustomGraphOptimizer {
         continue;
       }
 
-      ConvertNodeToLowPrecision(graph, node);
+      ConvertNodeToLowPrecision(graph, node, should_convert);
     }
   }
 
@@ -672,7 +680,7 @@ class MusaGraphOptimizer : public CustomGraphOptimizer {
     return DT_INVALID;
   }
 
-  bool ConvertNodeToLowPrecision(GraphDef* graph, NodeDef* node) {
+  bool ConvertNodeToLowPrecision(GraphDef* graph, NodeDef* node, std::unordered_map<string, bool> should_convert) {
     string op_name = node->name();
     string device = node->device();
     DataType target_t = amp_config_.target_dtype;
@@ -682,7 +690,7 @@ class MusaGraphOptimizer : public CustomGraphOptimizer {
     } else if (node->mutable_attr()->count("dtype")) {
       (*node->mutable_attr())["dtype"].set_type(target_t);
     }
-
+    
     std::vector<string> new_inputs;
     for (int idx = 0; idx < node->input_size(); ++idx) {
       string input_name = node->input(idx);
@@ -691,7 +699,12 @@ class MusaGraphOptimizer : public CustomGraphOptimizer {
         new_inputs.push_back(input_name);
         continue;
       }
-
+      // no need to insert cast node if upstream node is convertible or already casted
+      string upstream_name = GetNodeNameFromInput(input_name);
+      if (should_convert[upstream_name]) {
+        new_inputs.push_back(input_name);
+        continue;
+    }
       if (input_name.find("/CastF2Lower") != std::string::npos) {
         new_inputs.push_back(input_name);
         continue;
@@ -717,7 +730,8 @@ class MusaGraphOptimizer : public CustomGraphOptimizer {
     for (int j = 0; j < graph->node_size(); ++j) {
       NodeDef* consumer = graph->mutable_node(j);
       if (consumer->name() == cast_out_name) continue;
-
+      if (should_convert[consumer->name()]) continue;
+      //no need to inset cast node if downstream node is convertible or already casted
       for (int k = 0; k < consumer->input_size(); ++k) {
         string inp = consumer->input(k);
 
