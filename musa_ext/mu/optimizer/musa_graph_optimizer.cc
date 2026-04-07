@@ -75,22 +75,10 @@ struct MusaOptimizerConfigs {
 
   // Keep disabled (handled internally by MUSA)
   TriState auto_mixed_precision = TriState::kOff;
-  TriState layout_optimizer = TriState::kOff;
 
   // Keep as Default or enable as needed
   TriState disable_model_pruning = TriState::kDefault;
-  TriState implementation_selector = TriState::kDefault;
-  TriState function_optimization = TriState::kDefault;
-  TriState common_subgraph_elimination = TriState::kDefault;
-  TriState arithmetic_optimization = TriState::kDefault;
-  TriState debug_stripper = TriState::kDefault;
-  TriState constant_folding = TriState::kDefault;
-  TriState shape_optimization = TriState::kDefault;
-  TriState auto_mixed_precision =
-      TriState::kDefault;  // MUSA handles AMP internally
-  TriState pin_to_host_optimization = TriState::kDefault;
   TriState layout_optimizer = TriState::kOff;  // MUSA handles layout internally
-  TriState remapping = TriState::kDefault;
   TriState loop_optimization = TriState::kDefault;
   TriState dependency_optimization = TriState::kDefault;
   TriState auto_parallel = TriState::kDefault;
