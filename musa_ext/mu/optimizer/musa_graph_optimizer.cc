@@ -54,24 +54,24 @@ enum class TriState { kDefault = 0, kOff = 1, kOn = 2 };
 
 // Optimizer configurations - controls interaction with TensorFlow built-in
 // optimizers Based on TF Modular Graph C API TP_OptimizerConfigs
+// CRITICAL FIX: Restore to kDefault to match working 9ded154 configuration
 struct MusaOptimizerConfigs {
-  // Keep enabled
-  TriState arithmetic_optimization = TriState::kOn;
-  TriState constant_folding = TriState::kOn;
-  TriState remapping = TriState::kOn;
-  TriState shape_optimization = TriState::kOn;
+  // Keep as Default for stability (was kOn, causing OOM and illegal memory
+  // access)
+  TriState arithmetic_optimization = TriState::kDefault;
+  TriState constant_folding = TriState::kDefault;
+  TriState remapping = TriState::kDefault;
+  TriState shape_optimization = TriState::kDefault;
 
-  // Recommended to enable (performance critical)
-  TriState implementation_selector =
-      TriState::kOn;                               // Select fastest algorithms
-  TriState function_optimization = TriState::kOn;  // Inlining optimization
-  TriState common_subgraph_elimination = TriState::kOn;  // Deduplication
-  TriState memory_optimization =
-      TriState::kOn;  // Memory optimization (training scenarios)
+  // Restore to kDefault to avoid unexpected memory layout changes
+  TriState implementation_selector = TriState::kDefault;
+  TriState function_optimization = TriState::kDefault;
+  TriState common_subgraph_elimination = TriState::kDefault;
+  TriState memory_optimization = TriState::kDefault;
 
-  // Inference-specific optimizations
-  TriState debug_stripper = TriState::kOn;
-  TriState pin_to_host_optimization = TriState::kOn;
+  // Inference-specific optimizations - use Default for safety
+  TriState debug_stripper = TriState::kDefault;
+  TriState pin_to_host_optimization = TriState::kDefault;
 
   // Keep disabled (handled internally by MUSA)
   TriState auto_mixed_precision = TriState::kOff;
